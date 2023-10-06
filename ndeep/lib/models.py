@@ -52,7 +52,7 @@ def concordance_index(event_times, predicted_scores, event_observed=None) -> flo
     num_pairs += 1e-50 
     return lifelines.utils.concordance._concordance_ratio(num_correct, num_tied, num_pairs)
 
-class lstm(nn.Module):
+class nDeep(nn.Module):
     def __init__(self,
                  input_size,
                  layer_hidden_sizes = [3,3,5], 
@@ -62,7 +62,7 @@ class lstm(nn.Module):
                  bidirectional = False,
                  batch_first = True,
                  label_size = 1):
-        super(lstm, self).__init__()
+        super(nDeep, self).__init__()
 
         self.num_layers = num_layers
         self.rnn_models = nn.ModuleList([])
@@ -97,7 +97,7 @@ class lstm(nn.Module):
         cur_output = (all_output * cur_M.unsqueeze(-1)).sum(dim=1)
         return cur_output
     
-class mtl_deephit(nn.Module):
+class DeepHit(nn.Module):
     def __init__(self, in_features, task_nums, hidden_layers = [3, 3, 5], out_features=[1, 1], p_dropout=0.6):
         super().__init__()
         self.sharedlayer = nn.Sequential(
@@ -137,7 +137,7 @@ class mtl_deephit(nn.Module):
         
         return output
     
-class mtl_lstm(nn.Module):
+class MTLnDeep(nn.Module):
     def __init__(self, 
                  in_features, 
                  shared_layers = [3], 
@@ -222,7 +222,7 @@ class mtl_lstm(nn.Module):
 
 def evaluation_f(model_instance, train_loader, rtrain_pred, test_loader, valid_loader = None,
                learning_rate= 1e-3, n_epochs=2, loss_func=loss_func, 
-               E=0, c_index=concordance_index, save_mod=False, device=device2):
+               E=0, c_index=concordance_index, save_mod=False, device='cpu'):
 
     torch.manual_seed(1)
     model = model_instance
@@ -275,7 +275,7 @@ def evaluation_f(model_instance, train_loader, rtrain_pred, test_loader, valid_l
                                                      batch_test['Y'][:, E].cpu())
     
     if save_mod:
-        torch.save(model.state_dict(),'./logs/lstm_E' + str(E) + '.pth')
+        torch.save(model.state_dict(),'./logs/ndeep_E' + str(E) + '.pth')
         print('Model was saved')
     else:
         print('Model was not saved')
@@ -386,7 +386,7 @@ def evaluation_mtl_deephit(model, train_loader, train_loader_pred, test_loader, 
 		results[i] = [train_c, test_c]
 	return results
 
-def evaluation_mtl_lstm(model, train_loader, rtrain_pred, test_loader, task_nums, model_name=None, learning_rate= 1e-3, n_epochs=2, loss_func=loss_func, c_index=concordance_index, save_mod = False, optimizer_name="Adam", device=device2):#1118
+def evaluation_mtl_ndeep(model, train_loader, rtrain_pred, test_loader, task_nums, model_name=None, learning_rate= 1e-3, n_epochs=2, loss_func=loss_func, c_index=concordance_index, save_mod = False, optimizer_name="Adam", device='cpu'):
     torch.manual_seed(1)
     model.to(device)
     optimizer = getattr(torch.optim, optimizer_name)(model.parameters(), lr=learning_rate,weight_decay=1e-8)
@@ -448,229 +448,7 @@ def evaluation_mtl_lstm(model, train_loader, rtrain_pred, test_loader, task_nums
         results[i] = [train_c, test_c]
         
     if save_mod:
-        torch.save(model.state_dict(),'./logs/new_mtl-lstm_' + model_name + '.pth')
+        torch.save(model.state_dict(),'./logs/new_mtl-ndeep_' + model_name + '.pth')
     	
     return results
     
-class LightninglstmClassifier(pl.LightningModule):
-
-    def __init__(self, 
-                input_size = 12,
-                layer_hidden_sizes = [3,3,5],
-                num_layers = 3,
-                bias = True,
-                dropout = 0.0,
-                bidirectional = False,
-                batch_first = True,
-                label_size = 1,
-                E=1):
-        super().__init__()
-        self.E = E
-        self.num_layers = num_layers
-        self.rnn_models = nn.ModuleList([])
-        if bidirectional:
-            layer_input_sizes = [input_size] + [2 * chs for chs in layer_hidden_sizes]
-        else:
-
-            layer_input_sizes = [input_size] + layer_hidden_sizes
-        for i in range(num_layers):
-            self.rnn_models.append(nn.LSTM(input_size = layer_input_sizes[i],
-                                     hidden_size = layer_hidden_sizes[i],
-                                     num_layers = num_layers,
-                                     bias = bias,
-                                     dropout = dropout,
-                                     bidirectional = bidirectional,
-                                     batch_first = batch_first))
-        self.label_size = label_size
-        self.output_size = layer_input_sizes[-1]
-        self.output_func = nn.Linear(self.output_size, self.label_size) 
-
-    def forward(self, input_data):
-        X = input_data['X'].float()
-        M = input_data['M'].float()
-        cur_M = input_data['cur_M'].float()
-        _data = X
-        for temp_rnn_model in self.rnn_models:
-            _data, _ = temp_rnn_model(_data)
-        outputs = _data
-        all_output = outputs * M.unsqueeze(-1)
-        n_batchsize, n_timestep, n_featdim = all_output.shape
-        all_output = self.output_func(outputs.reshape(n_batchsize*n_timestep, n_featdim)).reshape(n_batchsize, n_timestep, self.label_size)
-        cur_output = (all_output * cur_M.unsqueeze(-1)).sum(dim=1)
-        return all_output, cur_output
-
-    def surv_loss(self, pred, lifetime, event): 
-        return loss_func(pred, lifetime, event)
-
-    def training_step(self, train_batch, batch_idx):
-
-        E = self.E
-        _, yhat = self.forward(train_batch)
-        loss = self.surv_loss(pred = yhat, 
-                              lifetime=torch.tensor(np.sum(train_batch['T'].detach().numpy(), axis = 1)),
-                               event=torch.tensor(train_batch['Y'][:, E-1]),
-                               ) 
-        self.log('train_loss', loss)
-        
-        return {'loss': loss, 'pred': yhat, 'T': train_batch['T'], 'event': train_batch['Y'][:, E-1]}
-
-
-    def validation_step(self, val_batch, batch_idx):
-        E = self.E
-  
-        _, yhat = self.forward(val_batch)
-        loss = self.surv_loss(pred = yhat, 
-                              lifetime=torch.tensor(np.sum(val_batch['T'].detach().numpy(), axis = 1)),
-                               event=torch.tensor(val_batch['Y'][:, E-1]),
-                               ) 
-
-        self.log('val_loss', loss)
-        
-    def test_step(self, test_batch, batch_idx):
-        E = self.E
-        _, yhat = self.forward(test_batch)
-        acc = concordance_index(np.sum(test_batch['T'].detach().numpy(), axis = 1),  
-                                np.exp(yhat), 
-                                test_batch['Y'][:, E-1])
-        self.log('c-index', acc)
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
-    
-class Lightningmtl_lstm(pl.LightningModule):
-
-    def __init__(self, 
-                 in_features, 
-                 shared_layers = [3],
-                 num_tasks = 2, 
-                 lstm_layers = [3, 3, 5],  
-                 bias = True,
-                 dropout = 0.0, 
-                 batch_first = True,
-                 bidirectional = False,
-                 label_size = 1):
-        super().__init__()
-        self.sharedlayer = nn.Sequential(
-            nn.Linear(in_features, shared_layers[0]* in_features),  
-            nn.BatchNorm1d(shared_layers[0]* in_features),
-            nn.ReLU(), 
-        )
-
-        if bidirectional:
-            layer_input_sizes = [(shared_layers[-1]+1)*in_features] + [2 * chs for chs in lstm_layers]
-        else:
-
-            layer_input_sizes = [(shared_layers[-1]+1)*in_features] + lstm_layers 
-
-        self.rnn_models = nn.ModuleList([]) 
-
-        for i in range(len(lstm_layers)):
-            self.rnn_models.append(nn.LSTM(input_size = layer_input_sizes[i],
-                                        hidden_size = lstm_layers[i],
-                                        num_layers = len(lstm_layers),
-                                        bias = bias,
-                                        dropout = dropout,
-                                        bidirectional = bidirectional,
-                                        batch_first = batch_first))
-        self.in_features = in_features
-        self.shared_layers = shared_layers
-        self.lstm_layers = lstm_layers
-        self.label_size = label_size
-        self.output_size = layer_input_sizes[-1]
-
-        self.task = nn.ModuleList()
-        for task in range(num_tasks):
-            self.task.append(nn.Sequential(
-                self.rnn_models,
-                nn.Linear(self.output_size, self.label_size)))
-
-        self.output_func = nn.Linear(self.output_size, self.label_size)
-
-    def forward(self, input_data):
-        x_wide = torch.stack([x[0] for x in input_data['X']])
-        residual = x_wide.float() 
-        shared = self.sharedlayer(x_wide.float()) 
-        shared = torch.cat((shared, residual), dim=1) 
-        time = np.sum(input_data['T'].detach().cpu().numpy(), axis = 1) 
-        X = []
-        
-        for i in range(len(shared)):
-            if time[i]< 2:
-                X.append(shared[i])
-            else:
-                X.append(shared[i].repeat(time[i].astype(int), 1))
-                
-        # Replicate x_series similar to DatasetReader
-        x_series = torch.zeros(len(X), 
-                               len(input_data['M'][0]),
-                               (self.shared_layers[0]+1) * self.in_features)
-        
-        for i in range(len(X)):    
-            x_series[i][:len(X[i]), :] = X[i] 
-        X = x_series 
-        M = input_data['M'].float()
-        cur_M = input_data['cur_M'].float()
-        output = []
-        
-        for task in self.task:
-            _data = X   
-            for temp_rnn_model in self.rnn_models: 
-                _data, _ = temp_rnn_model(_data) 
-            outputs = _data
-            all_output = outputs * M.unsqueeze(-1)
-            n_batchsize, n_timestep, n_featdim = all_output.shape
-            all_output = self.output_func(outputs.reshape(n_batchsize*n_timestep, n_featdim)).reshape(n_batchsize, n_timestep, self.label_size)
-            cur_output = (all_output * cur_M.unsqueeze(-1)).sum(dim=1)
-            output.append(cur_output) 
-        return output 
-
-    def surv_loss(self, pred, lifetime, event): 
-        return loss_func(pred, lifetime, event) 
-
-    def training_step(self, train_batch, batch_idx):
-        task_nums = train_batch['Y'].shape[1]
-        yhat = self.forward(train_batch) 
-        train_loss = []
-        
-        for i in range(task_nums):
-            loss = self.surv_loss(pred = yhat[i], 
-                                lifetime=torch.tensor(np.sum(train_batch['T'].detach().numpy(), axis = 1)), 
-                                event=torch.tensor(train_batch['Y'][:, i]),
-                                ) 
-            train_loss.append(loss)
-        train_loss =  sum(train_loss)/len(train_loss)
-        self.log('train_loss', train_loss) 
-        
-        return {'loss': train_loss, 'pred': yhat, 'T': train_batch['T'], 'event': train_batch['Y'][:, i]} 
-
-    def validation_step(self, val_batch, batch_idx): 
-        task_nums = val_batch['Y'].shape[1] 
-        yhat = self.forward(val_batch) 
-        val_loss = []
-        
-        for i in range(task_nums):
-            loss = self.surv_loss(pred = yhat[i], 
-                                lifetime=torch.tensor(np.sum(val_batch['T'].detach().numpy(), axis = 1)), 
-                                event=torch.tensor(val_batch['Y'][:, i]),
-                                )
-            val_loss.append(loss)
-        val_loss =  sum(val_loss)/len(val_loss)
-        self.log('val_loss', val_loss) 
-
-    def test_step(self, test_batch, batch_idx): 
-        task_nums = test_batch['Y'].shape[1] 
-        yhat = self.forward(test_batch) 
-        accs = {}
-        
-        for i in range(task_nums):
-            acc = concordance_index(np.sum(test_batch['T'].detach().numpy(), axis = 1),  
-                                    np.exp(yhat[i]),
-                                    test_batch['Y'][:, i])
-            accs['event_' + str(i+1)] = acc
-   
-        self.log('c-index', accs) 
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer

@@ -15,7 +15,7 @@ from models import loss_func, concordance_index
 import warnings
 warnings.filterwarnings("ignore")
 
-class LightninglstmClassifier(pl.LightningModule):
+class LightningnDeep(pl.LightningModule):
 
     def __init__(self, 
                 input_size = 12, 
@@ -100,7 +100,7 @@ class LightninglstmClassifier(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
 
-class Lightningmtl_lstm(pl.LightningModule):
+class LightningMTLnDeep(pl.LightningModule):
 
     def __init__(self, 
                  in_features,
@@ -236,8 +236,8 @@ class Lightningmtl_lstm(pl.LightningModule):
         return optimizer
 
 
-def pl_lstm(train, train_f, test, valid, input_size, task_name , n_epochs=1):
-    model = LightninglstmClassifier(input_size = input_size, 
+def pl_ndeep(train, train_f, test, valid, input_size, task_name , n_epochs=1):
+    model = LightningnDeep(input_size = input_size, 
                     layer_hidden_sizes = [3,3,5])
     trainer = pl.Trainer(max_epochs=n_epochs)
     trainer.fit(model, train, valid)
@@ -246,8 +246,8 @@ def pl_lstm(train, train_f, test, valid, input_size, task_name , n_epochs=1):
     train_result = trainer.test(model, dataloaders=train_f, verbose=False)
     return train_result, test_result
 
-def pl_mtl_lstm(train, train_f, test, valid, input_size, num_tasks, n_epochs=1):
-    model = Lightningmtl_lstm(in_features=input_size, num_tasks=num_tasks)
+def pl_mtl_ndeep(train, train_f, test, valid, input_size, num_tasks, n_epochs=1):
+    model = LightningMTLnDeep(in_features=input_size, num_tasks=num_tasks)
     trainer = pl.Trainer(max_epochs=n_epochs)  
     trainer.fit(model, train, valid) 
     train_result = trainer.test(model, dataloaders=train_f, verbose=False)

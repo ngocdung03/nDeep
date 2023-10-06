@@ -32,7 +32,7 @@ def parse_args():
     desc = 'Evaluate survival analysis models'
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('--n_trials', type=int, default=1, help='number of trials')
-    parser.add_argument('--model', type=str, default='cox', help='surival model name, default cox, {cox, deepsurv, deephit, lstm, mtl_lstm}')
+    parser.add_argument('--model', type=str, default='cox', help='surival model name, default cox, {cox, deepsurv, deephit, ndeep, mtl_ndeep}')
     parser.add_argument('--dataset', type=str, help='data file')
     parser.add_argument('--feature', type=str, help='feature file')
     parser.add_argument('--cancer', type=str, help='cancer file')
@@ -60,7 +60,7 @@ def check_args(args):
     except AssertionError: 
         print('n_trials should be greater than 0')
         sys.exit(1)
-    models = ['cox', 'deepsurv', 'deephit', 'lstm', 'mtl_lstm', 'pl_lstm', 'pl_mtl_lstm']
+    models = ['cox', 'deepsurv', 'deephit', 'ndeep', 'mtl_ndeep', 'pl_ndeep', 'pl_mtl_ndeep']
     try:
         assert args.model in models
     except AssertionError: 
@@ -244,13 +244,13 @@ def run_cph(train, test, feature, event=None, duration=None):
     train_c, test_c = cox_regression((train, test), feature=feature, event=event, duration=duration)
     print(str(args), '\ttrain:', train_c, 'test:', test_c)
 
-def run_lstm(args, train, train_f, test, event_ind=None, valid=None, pl2=False):
+def run_ndeep(args, train, train_f, test, event_ind=None, valid=None, pl2=False):
     n=[x['X'].shape for x in test][0][-1]
     if pl2:
-        train_result, test_result = pl_lstm(train, train_f, test, valid, n, str(args.tasks[0]), n_epochs=args.n_epochs)
+        train_result, test_result = pl_ndeep(train, train_f, test, valid, n, str(args.tasks[0]), n_epochs=args.n_epochs)
         print(str(args), '\ttrain:', train_result, 'test:', test_result)
     else:
-        model = lstm(n, dropout=args.dropout)
+        model = nDeep(n, dropout=args.dropout)
         train_c, test_c = evaluation_f(model, train, train_f, test, learning_rate=args.learning_rate, n_epochs=args.n_epochs, E=event_ind, save_mod=args.save_mod)
         print(str(args), '\ttrain:', train_c, 'test:', test_c)
     
@@ -269,21 +269,21 @@ def run_mtl_deephit(train, train_pred, test, args, device):
         hparams = hparams1
     elif args.tasks[0] == 'PROST':
         hparams = hparams2
-    model = mtl_deephit(n, num_tasks, p_dropout=hparams['p_dropout'])
+    model = DeepHit(n, num_tasks, p_dropout=hparams['p_dropout'])
     results = evaluation_mtl_deephit(model, train, train_pred, test, num_tasks, n_epochs=args.n_epochs, loss_func=loss_func, device=device, learning_rate=hparams['learning_rate'])
     for i in range(num_tasks):
         print(str(args),'\nEvent ',i+1, '\ttrain:', results[i][0], 'test:', results[i][1])
         
-def run_mtl_lstm(args, train, train_f, test, valid=None, device=None, pl2=False): 
+def run_mtl_ndeep(args, train, train_f, test, valid=None, device=None, pl2=False): 
     n=[x['X'].shape for x in test][0][-1]
     num_tasks = len(args.tasks)
     if pl2:
-        train_result, test_result = pl_mtl_lstm(train, train_f, test, valid, n, num_tasks=num_tasks, n_epochs=args.n_epochs) 
+        train_result, test_result = pl_mtl_ndeep(train, train_f, test, valid, n, num_tasks=num_tasks, n_epochs=args.n_epochs) 
         print(str(args), '\ttrain:', train_result, 'test:', test_result)
     else:
         model_name = args.tasks[0] + str(len(args.tasks))
-        model = mtl_lstm(n, num_tasks=num_tasks)
-        results = evaluation_mtl_lstm(model, train, train_f, test, num_tasks, model_name=model_name, n_epochs = args.n_epochs, save_mod=args.save_mod, device=device) #1118
+        model = MTLnDeep(n, num_tasks=num_tasks)
+        results = evaluation_mtl_ndeep(model, train, train_f, test, num_tasks, model_name=model_name, n_epochs = args.n_epochs, save_mod=args.save_mod, device=device) #1118
         for i in range(num_tasks):
             print(str(args), '\nEvent', i+1, '\ttrain:', results[i][0], 'test:', results[i][1])
             
@@ -308,7 +308,7 @@ if __name__ == '__main__':
         if args.model == 'cox':
             run_cph(train2, test2, feature, event=args.tasks[0], duration='time')
             
-        elif args.model in ['lstm', 'pl_lstm']:
+        elif args.model in ['ndeep', 'pl_ndeep']:
             worker = 0
             train_loader, train_loader_f = get_loader(train2, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker) 
             test_loader = get_loader(test2, covariates=feature, outcome=args.tasks, device = device, num_workers=worker) 
@@ -317,12 +317,12 @@ if __name__ == '__main__':
             valid_loader2, _ = get_loader(val3, covariates=feature, outcome=args.tasks[0], batch_size=args.batch_size, device=device, num_workers=worker) 
             test_loader2 = get_loader(test3, covariates=feature, outcome=args.tasks[0], device = device, num_workers=worker)
             
-            if args.model == 'lstm':
+            if args.model == 'ndeep':
                 for i in range(len(args.tasks)):
-                    run_lstm(args, train_loader, train_loader_f, test_loader, event_ind=i, pl2=False)
+                    run_ndeep(args, train_loader, train_loader_f, test_loader, event_ind=i, pl2=False)
 
-            elif args.model == 'pl_lstm':
-                run_lstm(args, train_loader2, train_loader_f2, test_loader2, valid_loader2, pl2=True)
+            elif args.model == 'pl_ndeep':
+                run_ndeep(args, train_loader2, train_loader_f2, test_loader2, valid_loader2, pl2=True)
             
         elif args.model == 'deepsurv':
             run_deepsurv(train2, test2, args, feature=feature, event=args.tasks, duration='time', device=device)
@@ -333,7 +333,7 @@ if __name__ == '__main__':
             test_loader = get_loader_deephit(test2, feature, outcome, 'time')
             run_mtl_deephit(train_loader, train_loader_f, test_loader, args, device=device)
             
-        elif args.model in ['mtl_lstm', 'pl_mtl_lstm']:
+        elif args.model in ['mtl_ndeep', 'pl_mtl_ndeep']:
             worker = args.num_workers
             train_loader, train_loader_f = get_loader(train2, covariates = feature, outcome= args.tasks, batch_size = args.batch_size, num_workers=worker)
             test_loader = get_loader(test2, covariates = feature, outcome = args.tasks, num_workers=worker)
@@ -342,10 +342,10 @@ if __name__ == '__main__':
             valid_loader2, _ = get_loader(val3, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker) 
             test_loader2 = get_loader(test3, covariates=feature, outcome=args.tasks, device=device, num_workers=worker)
             
-            if args.model == 'mtl_lstm':
-                run_mtl_lstm(args, train_loader2, train_loader_f2, test_loader2, device=device, pl2=False)
-            elif args.model == 'pl_mtl_lstm':
-                run_mtl_lstm(args, train_loader2, train_loader_f2, test_loader2, valid_loader2, pl2=True)
+            if args.model == 'mtl_ndeep':
+                run_mtl_ndeep(args, train_loader2, train_loader_f2, test_loader2, device=device, pl2=False)
+            elif args.model == 'pl_mtl_ndeep':
+                run_mtl_ndeep(args, train_loader2, train_loader_f2, test_loader2, valid_loader2, pl2=True)
 
                
             
