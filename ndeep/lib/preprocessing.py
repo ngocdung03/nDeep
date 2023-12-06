@@ -25,11 +25,10 @@ def make_2nd_variable(name, df=None):
             return df
         elif name == 'ccr':
             df['CCR'] =  (140 - df['AGE_B']) * df['WT_B'] / (df['CREAT_B'] * 72)
-            df['CCR'].where(df['SEX1'] == 2, df['CCR'] * 0.85)
-            return df
+            df['CCR'][df['SEX1'] == 2] = df['CCR'] * .85
         elif name == 'egfr':
             df['eGFR'] = 186.3 * (df['CREAT_B']**-1.154) * (df['AGE_B']**-0.203)
-            df['eGFR'].where(df['SEX1'] == 2, df['eGFR'] * 0.742)
+            df['eGFR'][df['SEX1'] == 2] = df['eGFR'] * .742
             return df
         
     return df

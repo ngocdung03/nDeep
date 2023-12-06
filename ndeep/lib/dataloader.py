@@ -57,11 +57,12 @@ def _multiply(args):
 
 def get_loader(raw, 
              outcome=None,
-             covariates = None,
-             age_var = None,
-             batch_size = None,
+             covariates=None,
+             age_var=None,
+             batch_size=None,
                 device='cpu',
-                num_workers = 0
+                num_workers=0,
+                drop_last=False
              ):
     input_data = []
     for i in raw.index:
@@ -97,10 +98,10 @@ def get_loader(raw,
                             } 
         
     if batch_size is None:
-        return DataLoader(DatasetReader(rdata, device = device), batch_size=len(rdata['y']), drop_last=True, shuffle=True, num_workers=num_workers)
-    return DataLoader(DatasetReader(rdata, device = device), batch_size=batch_size, drop_last=True, shuffle=True, num_workers=num_workers), DataLoader(DatasetReader(rdata, device= device), batch_size=len(rdata['y']), drop_last=True, shuffle=True,num_workers=num_workers)
+        return DataLoader(DatasetReader(rdata, device = device), batch_size=len(rdata['y']), drop_last=False, shuffle=False, num_workers=num_workers) 
+    return DataLoader(DatasetReader(rdata, device = device), batch_size=batch_size, drop_last=drop_last, shuffle=True, num_workers=num_workers), DataLoader(DatasetReader(rdata, device= device), batch_size=len(rdata['y']), drop_last=False, shuffle=False,num_workers=num_workers) 
 
-def get_loader_deephit(df, feature, events, duration, batch_size=None, device ='cpu'):
+def get_loader_deephit(df, feature, events, duration, batch_size=None, device ='cpu', drop_last=False):
     covs = df[feature]
     label = df[[duration] + events]
     covs = covs.to_numpy().astype(np.float32) if type(covs).__module__ != 'numpy' else covs
@@ -108,6 +109,6 @@ def get_loader_deephit(df, feature, events, duration, batch_size=None, device ='
     torch.manual_seed(1)
     tensor_dataset = TensorDataset(torch.from_numpy(covs).float().to(device), torch.from_numpy(label[:,0]).float().to(device), torch.from_numpy(label[:,1:]).float().to(device))
     if batch_size is None:
-        return DataLoader(dataset=tensor_dataset, batch_size = len(df), shuffle=True, drop_last=True)
-    return DataLoader(dataset=tensor_dataset, batch_size = batch_size, shuffle=True, drop_last=True), DataLoader(dataset=tensor_dataset, batch_size = len(df), shuffle=True, drop_last=True)
+        return DataLoader(dataset=tensor_dataset, batch_size = len(df), shuffle=False, drop_last=False) ## 1206
+    return DataLoader(dataset=tensor_dataset, batch_size = batch_size, shuffle=True, drop_last=drop_last), DataLoader(dataset=tensor_dataset, batch_size = len(df), shuffle=False, drop_last=False) ## 1206
 
