@@ -7,7 +7,7 @@ import time
 from pycox.models import CoxPH
 from pycox.evaluation import EvalSurv
 import torchtuples as tt
-import pytorch_lightning as pl
+import lightning as pl
 
 def onePair(x0, x1):
     c = np.log(2.)
@@ -56,7 +56,6 @@ class nDeep(nn.Module):
     def __init__(self,
                  input_size,
                  layer_hidden_sizes = [3,3,5], 
-                 num_layers = 3,
                  bias = True,
                  dropout = 0.0,
                  bidirectional = False,
@@ -64,7 +63,7 @@ class nDeep(nn.Module):
                  label_size = 1):
         super(nDeep, self).__init__()
 
-        self.num_layers = num_layers
+        num_layers = len(layer_hidden_sizes)
         self.rnn_models = nn.ModuleList([])
         if bidirectional:
             layer_input_sizes = [input_size] + [2 * chs for chs in layer_hidden_sizes]

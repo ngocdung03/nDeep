@@ -60,46 +60,50 @@ def get_loader(raw,
              covariates=None,
              age_var=None,
              batch_size=None,
-                device='cpu',
-                num_workers=0,
-                drop_last=False
+             device='cpu',
+             num_workers=0,
+             drop_last=False,
+             train_shuffle=True,
+             time2=True,
+             val=False
              ):
     input_data = []
     for i in raw.index:
-        time = raw.loc[i, 'time']
+        time = raw.loc[i, 'time2'] if time2 else raw.loc[i, 'time']
         time_round = int(time)
         age = int(raw.loc[i, age_var]) if age_var else None 
         dat = pd.DataFrame(raw.loc[i,:]).transpose() 
         if time <= 1:
-                dat['time'] = dat['time']
+                # dat['time'] = dat['time']
+                pass
     
         elif time == time_round:
                 dat = dat.append(pd.DataFrame([raw.loc[i,:]]*
                                         (time_round - 1)), ignore_index=True)
-                dat['time'] = [t for t in range(1, time_round+1)]
+                # dat['time'] = [t for t in range(1, time_round+1)]
     
         elif time % time_round !=0:
                 dat = dat.append(pd.DataFrame([raw.loc[i,:]]*
                                         time_round), ignore_index=True)
-                dat['time'] = [t for t in range(1, time_round+1)] + [time%time_round]
+                # dat['time'] = [t for t in range(1, time_round+1)] + [time%time_round]
            
         input_data.append(dat)
     
     if covariates == None:
-            covariates = list(set(input_data[0].columns) - set(['time', 'label', 'id']))
+            covariates = list(set(input_data[0].columns) - set(['time2', 'time', 'label', 'id']))
 
     label_raw = raw[[outcome]] if type(outcome) != list else raw[outcome]
     label_raw = label_raw.to_numpy().astype(np.float32) if type(label_raw).__module__ != 'numpy' else label_raw    
     
     rdata = {'x': [x[covariates] for x in input_data], 
-                            'y': label_raw ,
-                            'time': [x['time'] for x in input_data],      
-                            'l': [len(x) if x['time'].iloc[-1]!=0 else 0 for x in input_data],
-                            } 
+             'y': label_raw ,
+             'time': [x['time'] for x in input_data],      
+             'l': [len(x) if x['time'].iloc[-1]!=0 else 0 for x in input_data]
+             } 
         
     if batch_size is None:
         return DataLoader(DatasetReader(rdata, device = device), batch_size=len(rdata['y']), drop_last=False, shuffle=False, num_workers=num_workers) 
-    return DataLoader(DatasetReader(rdata, device = device), batch_size=batch_size, drop_last=drop_last, shuffle=True, num_workers=num_workers), DataLoader(DatasetReader(rdata, device= device), batch_size=len(rdata['y']), drop_last=False, shuffle=False,num_workers=num_workers) 
+    return DataLoader(DatasetReader(rdata, device = device), batch_size=batch_size, drop_last=drop_last, shuffle=train_shuffle, num_workers=num_workers) #, DataLoader(DatasetReader(rdata, device= device), batch_size=len(rdata['y']), drop_last=False, shuffle=False,num_workers=num_workers) 
 
 def get_loader_deephit(df, feature, events, duration, batch_size=None, device ='cpu', drop_last=False):
     covs = df[feature]

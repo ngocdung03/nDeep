@@ -8,7 +8,7 @@ sys.path.append('/home/petaon/python_packages/site-packages')
 import torch.nn.functional as F
 import torch.optim as optim
 import pandas as pd
-import pytorch_lightning as pl
+import lightning as pl
 from models import loss_func, concordance_index
 
 
@@ -20,7 +20,6 @@ class LightningnDeep(pl.LightningModule):
     def __init__(self, 
                 input_size = 12, 
                 layer_hidden_sizes = [3,3,5],
-                num_layers = 3,
                 bias = True,
                 dropout = 0.0,
                 bidirectional = False,
@@ -29,7 +28,7 @@ class LightningnDeep(pl.LightningModule):
                 E=1):
         super().__init__()
         self.E = E
-        self.num_layers = num_layers
+        num_layers = len(layer_hidden_sizes)
         self.rnn_models = nn.ModuleList([])
         if bidirectional:
             layer_input_sizes = [input_size] + [2 * chs for chs in layer_hidden_sizes]

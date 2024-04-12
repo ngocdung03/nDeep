@@ -1,5 +1,5 @@
 import os
-from re import L
+# from re import L
 import sys
 import argparse
 import numpy as np
@@ -9,7 +9,7 @@ import time
 import warnings
 import torch
 from scipy.stats import zscore
-import pytorch_lightning as pl
+import lightning as pl
 warnings.filterwarnings("ignore")
 HOME = os.path.split(os.path.abspath(__file__))[0]
 sys.path.append(HOME+'/lib')
@@ -190,6 +190,12 @@ def load_dataset2(args, validation=None, target= None, new_data=False, drop_norm
     data['LUNG_LAR'] = data.LUNG + data.LARYN
     data['UTE_CER'] = data.UTERI_C54 + data.UTERI_C55 + data.CERVI
     
+    # change values > 1 (due to duplication) into 1 ##0202
+    new_col = ['CRC', 'LYMPH', 'GALL_BILE', 'LUNG_LAR', 'UTE_CER']
+    for col in new_col:
+        data[col][data[col]>1] = 1
+        
+    # define 'time' column
     data['time'] = data['time'] = data.iloc[:,100:168].mode(axis=1) if new_data else data.iloc[:, -19:].mode(axis=1)
     # drop na for age and sex
     data = data[~data['AGE_B'].isna()][~data['SEX1'].isna()]
@@ -310,11 +316,13 @@ if __name__ == '__main__':
             
         elif args.model in ['ndeep', 'pl_ndeep']:
             worker = 0
-            train_loader, train_loader_f = get_loader(train2, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker) 
+            train_loader = get_loader(train2, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker, drop_last=True, train_shuffle=True)
+            train_loader_f = get_loader(train2, covariates=feature, outcome=args.tasks, device = device, num_workers=worker)  
             test_loader = get_loader(test2, covariates=feature, outcome=args.tasks, device = device, num_workers=worker) 
             
-            train_loader2, train_loader_f2 = get_loader(train3, covariates=feature, outcome=args.tasks[0], batch_size=args.batch_size, device = device, num_workers=worker) 
-            valid_loader2, _ = get_loader(val3, covariates=feature, outcome=args.tasks[0], batch_size=args.batch_size, device=device, num_workers=worker) 
+            train_loader2 = get_loader(train3, covariates=feature, outcome=args.tasks[0], batch_size=args.batch_size, device = device, num_workers=worker, drop_last=True, train_shuffle=True)
+            train_loader_f2 = get_loader(train3, covariates=feature, outcome=args.tasks[0], device = device, num_workers=worker) 
+            valid_loader2 = get_loader(val3, covariates=feature, outcome=args.tasks[0], batch_size=args.batch_size, device=device, num_workers=worker, drop_last=True, train_shuffle=True) 
             test_loader2 = get_loader(test3, covariates=feature, outcome=args.tasks[0], device = device, num_workers=worker)
             
             if args.model == 'ndeep':
@@ -335,11 +343,13 @@ if __name__ == '__main__':
             
         elif args.model in ['mtl_ndeep', 'pl_mtl_ndeep']:
             worker = args.num_workers
-            train_loader, train_loader_f = get_loader(train2, covariates = feature, outcome= args.tasks, batch_size = args.batch_size, num_workers=worker)
+            train_loader = get_loader(train2, covariates = feature, outcome= args.tasks, batch_size = args.batch_size, num_workers=worker, drop_last=True, train_shuffle=True)
+            train_loader_f = get_loader(train2, covariates = feature, outcome= args.tasks, num_workers=worker)
             test_loader = get_loader(test2, covariates = feature, outcome = args.tasks, num_workers=worker)
             
-            train_loader2, train_loader_f2 = get_loader(train3, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker)
-            valid_loader2, _ = get_loader(val3, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker) 
+            train_loader2 = get_loader(train3, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker, drop_last=True, train_shuffle=True)
+            train_loader_f2 = get_loader(train3, covariates=feature, outcome=args.tasks, device = device, num_workers=worker)
+            valid_loader2 = get_loader(val3, covariates=feature, outcome=args.tasks, batch_size=args.batch_size, device = device, num_workers=worker, drop_last=True, train_shuffle=True) 
             test_loader2 = get_loader(test3, covariates=feature, outcome=args.tasks, device=device, num_workers=worker)
             
             if args.model == 'mtl_ndeep':
